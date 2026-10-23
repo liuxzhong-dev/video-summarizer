@@ -1,0 +1,40 @@
+# VideoSummarizer 依赖清单
+#
+# 核心（必须）
+requests>=2.31.0            # HTTP 客户端
+yt-dlp>=2024.1.0            # 万能解析/下载后手，覆盖上千站点
+imageio-ffmpeg>=0.4.9       # 自带一份 ffmpeg 二进制，免得用户自己装
+
+# 界面（exe 需要；只用命令行可以不装）
+pywebview>=5.0              # 桌面内嵌窗口（失败会自动退回浏览器）
+
+# 文档解析（拖拽 PDF / Word / Excel / PPT 进来总结时需要）
+# 这些都是**延迟导入的可选依赖**：没装不影响链接总结，
+# 只是拖入对应文件时会提示「装哪个库」。发布版 exe 已内置。
+pypdf>=4.0                  # PDF 取文字层（扫描件无文字层，需 OCR）
+python-docx>=1.1            # Word .docx（.doc 不支持，需先另存为 .docx）
+openpyxl>=3.1               # Excel .xlsx（取公式的计算结果）
+xlrd>=2.0                   # Excel .xls（旧版二进制；xlrd 2.x 只管 .xls）
+python-pptx>=0.6.23         # PowerPoint .pptx（含演讲备注）
+# 注：.epub / .odt / .ods / .odp 用标准库（zipfile + XML）解析；
+#     .rtf / .srt / .vtt / .ass / .mhtml 也是标准库，都不需要额外依赖。
+
+# 语音识别（可选，但强烈建议 —— 视频没字幕时全靠它）
+faster-whisper>=1.0         # 离线转写，首次使用自动下载模型
+
+# 浏览器兜底（必需）—— 抖音/快手/小红书这类强风控平台靠它拿视频流。
+# 它们的风控凭证由浏览器 JS 动态生成（服务器根本不下发），
+# HTTP 请求伪造不出来，只有启动真实浏览器才拿得到视频流。
+# 用**系统已装的** Edge/Chrome，所以**不需要**跑 `playwright install`，
+# 也不会多出几百 MB 的浏览器内核，只多约 40 MB driver。
+# 打包时缺它会在构建阶段直接中止（理由见 VideoSummarizer.spec）——
+# 这一条曾经写成"可选"，结果连着几版 exe 都静默少了这块能力，别再改回去。
+playwright>=1.40
+
+# 打包（仅构建 exe 时需要）
+pyinstaller>=6.3
+
+# 说明：
+# 1) faster-whisper 依赖的 av 包在部分 Python 版本上装不上/接口不兼容，
+#    本项目已改为「自己解码 PCM 再喂给模型」，不依赖 av 也能正常转写。
+# 2) 不需要 GPU：默认 CPU + int8 量化即可跑，长视频慢一点而已。

@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>VideoSummarizer · 视频链接一键总结</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: #f4f6f9; color: #1f2328;
+    font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  header {
+    background: #ffffff; border-bottom: 1px solid #e3e6ea; padding: 14px 22px;
+    display: -ms-flexbox; display: flex; -ms-flex-align: center; align-items: center;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  header .sub { color: #6e7781; font-size: 12px; margin-left: 12px; }
+  header .spacer { -ms-flex: 1; flex: 1; }
+  main { padding: 18px 22px 40px; max-width: 1080px; margin: 0 auto; }
+  .card {
+    background: #fff; border: 1px solid #e3e6ea; border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px; margin: 0 0 10px; color: #57606a; font-weight: 600;
+    text-transform: none; letter-spacing: .5px;
+  }
+  textarea, input, select {
+    font-family: inherit; font-size: 13px; color: #1f2328;
+    border: 1px solid #d0d7de; border-radius: 6px; padding: 7px 9px;
+    background: #fff; outline: none;
+  }
+  textarea:focus, input:focus, select:focus { border-color: #4c8ffb; }
+  #input { width: 100%; height: 74px; resize: vertical; }
+  .row { margin-top: 10px; }
+  .row label { margin-right: 6px; color: #57606a; font-size: 13px; }
+  button {
+    font-family: inherit; font-size: 13px; padding: 7px 16px; cursor: pointer;
+    border: 1px solid #d0d7de; background: #fff; color: #1f2328; border-radius: 6px;
+  }
+  button:hover { background: #f3f4f6; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button.primary:hover { background: #1a5fd0; }
+  button:disabled { opacity: .5; cursor: default; }
+  .btns { margin-top: 10px; }
+  .btns button { margin-right: 8px; }
+  .bar {
+    height: 8px; background: #eaeef2; border-radius: 5px; overflow: hidden; margin-top: 8px;
+  }
+  .bar > i { display: block; height: 100%; width: 0; background: #1f6feb; transition: width .25s; }
+  .status { color: #57606a; font-size: 13px; margin-top: 6px; min-height: 20px; }
+  .status.err { color: #cf222e; }
+  .status.ok { color: #1a7f37; }
+  #result { min-height: 120px; }
+  .md h1 { font-size: 19px; color: #0b2d6b; margin: 14px 0 8px; }
+  .md h2 { font-size: 15px; color: #1a7f37; margin: 16px 0 6px;
+           border-left: 3px solid #1a7f37; padding-left: 8px; }
+  .md h3 { font-size: 14px; color: #333; margin: 12px 0 4px; }
+  .md ul { margin: 6px 0; padding-left: 22px; }
+  .md li { margin: 3px 0; }
+  .md blockquote {
+    margin: 8px 0; padding: 6px 12px; color: #6e7781;
+    border-left: 3px solid #d0d7de; background: #fafbfc;
+  }
+  .md code { background: #f0f2f5; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .md hr { border: 0; border-top: 1px solid #e3e6ea; margin: 14px 0; }
+  .meta {
+    margin-top: 14px; padding-top: 10px; border-top: 1px dashed #e3e6ea;
+    color: #6e7781; font-size: 12px;
+  }
+  .meta span { margin-right: 16px; }
+  .tag {
+    display: inline-block; background: #eef4ff; color: #1f6feb; border-radius: 4px;
+    padding: 1px 8px; margin: 0 5px 5px 0; font-size: 12px;
+  }
+  .hint { color: #9a6700; font-size: 12px; margin-top: 6px; }
+  /* 转写备注：ASR 失败时会带上「真实原因 + 音频保留路径 + 可直接重试」，
+     内容是多行的。普通 .hint 没有 pre-wrap，换行会被折叠成空格 ——
+     一整段挤成一行后用户根本读不出「音频在哪个路径」，等于提示白给。 */
+  .hint.note { white-space: pre-wrap; line-height: 1.7; }
+  /* 失败时 hint 承载的是「下一步该做什么」——比如「去设置里填 Cookie」。
+     平时它是浅色小字没问题，失败时必须显眼，否则用户只看到一句
+     「无法解析」却不知道怎么办，等于没提示。 */
+  .hint.err {
+    color: #d1242f; font-size: 13px; line-height: 1.7;
+    background: #fff8f8; border-left: 3px solid #d1242f;
+    padding: 8px 12px; border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+  }
+  /* 已附加的文件。和输入框是「二选一」关系，所以要显眼、可移除 ——
+     否则用户拖完文件再粘贴一个链接，会以为两个都会被处理。 */
+  .attach {
+    display: none; margin-top: 10px; padding: 8px 11px;
+    background: #eef4ff; border: 1px solid #cfe0ff; border-radius: 6px;
+    font-size: 13px;
+  }
+  .attach.on { display: block; }
+  .attach .rm {
+    float: right; color: #d1242f; cursor: pointer; font-size: 12px;
+    -webkit-user-select: none; user-select: none;
+  }
+  .attach .rm:hover { text-decoration: underline; }
+  .attach .nm { font-weight: 600; word-break: break-all; }
+  .attach .sz { color: #6e7781; font-size: 12px; margin-left: 8px; }
+  /* 拖拽落点提示：全屏遮罩。
+     不用 transform 居中 —— 桌面窗口可能退回 IE 内核，那里不支持。 */
+  #dropMask {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+    display: none; z-index: 30; background: rgba(31,111,235,.08);
+    border: 3px dashed #1f6feb;
+  }
+  #dropMask.on { display: block; }
+  #dropMask .inner {
+    position: absolute; left: 18%; right: 18%; top: 38%;
+    background: #fff; border: 1px solid #cfe0ff; border-radius: 10px;
+    padding: 24px 28px; text-align: center; color: #1f6feb;
+    box-shadow: 0 8px 26px rgba(0,0,0,.16);
+  }
+  #dropMask .inner b { display: block; font-size: 17px; margin-bottom: 6px; }
+  #dropMask .inner span { color: #6e7781; font-size: 12px; }
+  /* 弹窗 */
+  .mask {
+    position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,.35);
+    display: none; z-index: 20;
+  }
+  .modal {
+    width: 720px; max-width: 94%; max-height: 86%; overflow: auto;
+    background: #fff; border-radius: 10px; margin: 60px auto; padding: 18px 22px 22px;
+  }
+  .modal h3 { margin: 16px 0 8px; font-size: 14px; color: #1f6feb; }
+  .modal h3:first-child { margin-top: 0; }
+  .field { margin-bottom: 8px; }
+  .field span { display: inline-block; width: 168px; color: #57606a; font-size: 13px; }
+  .field input[type=text], .field input[type=password], .field input { width: 400px; max-width: 58%; }
+/* 多行文本（关注方向）与勾选框的布局 */
+.field textarea { width: 400px; max-width: 58%; padding: 6px 9px; font: inherit;
+                  font-size: 13px; border: 1px solid #d0d7de; border-radius: 6px;
+                  resize: vertical; font-family: inherit; }
+.field.check input { width: auto; }
+.field.col { align-items: flex-start; }
+.field.col span { padding-top: 8px; }
+  /* 标签里的换行：长标签（如「云端 ASR Base URL」）自动折行，
+     问号跟着最后一个字走，不要被挤到下一行 */
+  .field span .q { margin-left: 4px; }
+  .field span { line-height: 1.7; }
+  .grid { border-top: 1px solid #e3e6ea; }
+  .grid div { padding: 5px 0; border-bottom: 1px solid #f0f2f5; font-size: 13px; }
+  .grid b { display: inline-block; width: 120px; font-weight: 600; }
+  .lv { color: #1a7f37; }
+  .lv2 { color: #9a6700; }
+  .lv3 { color: #cf222e; }
+  .close { float: right; }
+
+  /* ---- 术语悬浮说明 ---- */
+  /* 问号标记：鼠标停上去出详解 */
+  .q {
+    display: inline-block; width: 14px; height: 14px; line-height: 14px;
+    text-align: center; border-radius: 50%; background: #eef4ff; color: #1f6feb;
+    font-size: 10px; cursor: help; margin-left: 5px; vertical-align: 1px;
+    -webkit-user-select: none; user-select: none;
+  }
+  .q:hover { background: #1f6feb; color: #fff; }
+  /* 字段下方的常驻解释行 */
+  .expl {
+    display: block; margin: 3px 0 10px 172px; color: #6e7781;
+    font-size: 12px; line-height: 1.55; min-height: 17px;
+  }
+  .expl b { color: #1f6feb; font-weight: 600; }
+  .row .expl { margin-left: 0; }
+  /* 跟随鼠标的气泡 */
+  #tip {
+    position: fixed; display: none; z-index: 90; max-width: 330px;
+    background: #1f2328; color: #fff; font-size: 12px; line-height: 1.6;
+    padding: 8px 11px; border-radius: 6px; pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  }
+  #tip b { color: #9ecbff; font-weight: 600; }
+  /* 术语表 */
+  .term { border-top: 1px solid #e3e6ea; }
+  .term div { padding: 7px 0; border-bottom: 1px solid #f0f2f5; font-size: 13px; }
+  .term b { display: inline-block; min-width: 108px; color: #1f6feb; font-weight: 600; }
+  .term span { color: #57606a; }
+  .term i { color: #9a6700; font-style: normal; }
+  a.link { color: #1f6feb; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VideoSummarizer</h1>
+  <span class="sub">把抖音 / B站 / 快手 / 小红书 / 视频号的链接变成一份中文总结</span>
+  <span class="spacer"></span>
+  <button id="btnPlatforms">平台支持</button>
+  <button id="btnTerms" style="margin-left:8px">术语表</button>
+  <button id="btnSettings" style="margin-left:8px">设置</button>
+</header>
+
+<main>
+  <div class="card">
+    <h2>① 粘贴视频链接、文章链接、分享文案或正文 &nbsp;·&nbsp; 也可以把文件拖进来</h2>
+    <textarea id="input" placeholder="以下四种都能粘：
+① 视频链接或整段分享文案   6.66 gAh:/ 复制打开抖音…  https://v.douyin.com/xxxxx/
+② 文章/公众号/知乎链接     https://zhuanlan.zhihu.com/p/123456
+③ 直接粘正文（不要链接）   至少 60 字，程序按文章处理
+④ 本地文档路径             D:\notes\某篇.pdf 或 C:\x.docx（拖文件进来更省事）"></textarea>
+    <div class="attach" id="attach">
+      <span class="rm" id="attachRm" title="移除这个文件，改回输入框">✕ 移除</span>
+      已附加文件：<span class="nm" id="attachName"></span><span class="sz" id="attachSize"></span>
+    </div>
+    <div class="row">
+      <label>风格</label>
+      <select id="style" name="style_main" data-selkey="style">
+        <option value="detailed">detailed — 详细（含分段细讲）</option>
+        <option value="brief">brief — 极简（一句话 + 要点）</option>
+        <option value="bullets">bullets — 要点清单</option>
+      </select>
+      <label style="margin-left:14px">文本来源</label>
+      <select id="engine" name="engine_main" data-selkey="engine">
+        <option value="auto">auto — 自动（字幕优先，其次语音识别）</option>
+        <option value="subtitle">subtitle — 仅字幕（最快）</option>
+        <option value="faster-whisper">faster-whisper — 强制本地 Whisper</option>
+        <option value="cloud">cloud — 强制云端识别</option>
+      </select>
+    </div>
+    <div class="hint">「文本来源」只作用于<b>视频</b>。文章、纯文本与拖进来的文档直接抽正文，不走语音识别。</div>
+    <div class="expl" id="rowExpl"></div>
+    <div class="btns">
+      <button class="primary" id="btnRun">开始总结</button>
+      <button id="btnCancel" disabled>取消</button>
+      <button id="btnFile" title="选择本地文档：PDF / Word / Excel / PPT / EPUB / RTF / OpenDocument / 网页 / 字幕 / 文本 / Markdown">选择文件</button>
+      <button id="btnClear" title="清空输入框、结果与进度（快捷键 Esc）">清空</button>
+      <button id="btnDemo">填个示例</button>
+    </div>
+    <input type="file" id="filePick" style="display:none"
+           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.tsv,.rtf,.epub,.odt,.ods,.odp,.txt,.md,.markdown,.rst,.log,.json,.yaml,.yml,.xml,.ini,.toml,.cfg,.conf,.tex,.sql,.srt,.vtt,.ass,.ssa,.sbv,.html,.htm,.mhtml,.mht,.wps,.et,.dps">
+  </div>
+
+  <div class="card">
+    <h2>② 进度</h2>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="status" id="status">就绪</div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <div class="card">
+    <h2>③ 总结结果</h2>
+    <div class="md" id="result"><span style="color:#6e7781">结果会显示在这里…</span></div>
+    <div class="meta" id="meta"></div>
+    <div class="btns">
+      <button id="btnCopy" disabled>复制纯文本</button>
+      <button id="btnExport" disabled>导出到「我的文档\VideoSummarizer」</button>
+      <button id="btnVault" disabled>存入 Obsidian 知识库</button>
+      <button id="btnVaultForce" disabled style="display:none">强制存入精选</button>
+    </div>
+    <div class="meta" id="vaultMsg"></div>
+  </div>
+</main>
+
+<div class="mask" id="mask">
+  <div class="modal" id="modal">
+    <button class="close" id="btnClose">关闭</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div id="dropMask">
+  <div class="inner">
+    <b>松开鼠标，直接把文件变成总结</b>
+    <span>支持 PDF / Word / Excel / PPT / EPUB / RTF / OpenDocument / 网页 / 字幕 / 文本 等 —— 拖到窗口任意位置都行</span>
+  </div>
+</div>
+
+<script>
+/* ES5 写法：兼容 IE 内核的桌面窗口后端 */
+var CFG = null, TASK = null, TIMER = null, READY = false;
+
+function $(id) { return document.getElementById(id); }
+
+/* ==================================================================
+   术语词典：光标悬浮 / 常驻解释行都读这里
+   每个选项写全：中文含义 + 耗时 + 准确度/取舍
+   ================================================================== */
+var TERMS = {
+  /* 主界面 · 文本来源 */
+  engine: {
+    label: "文本来源",
+    desc: "视频的「文字」从哪来。平台有字幕就用字幕，没字幕就下载音频自己听写。",
+    items: {
+      "auto": ["自动（推荐）", "先找平台官方字幕；找不到就自动下载音频做本地语音识别。最省心，优先用这个。"],
+      "subtitle": ["仅字幕", "只用平台现成的字幕。最快（几乎零等待、零下载），但 B 站没登录态时通常拿不到，会直接失败。"],
+      "faster-whisper": ["强制本地 Whisper", "不管有没有字幕，都下载音频在本机转写。慢但离线、免费、不上传音频。"],
+      "cloud": ["强制云端识别", "把音频上传到第三方接口转写。快且准，但要 API Key，按量收费，音频要过网。" ]
+    }
+  },
+  /* 主界面 · 风格 */
+  style: {
+    label: "输出风格",
+    desc: "总结写成什么样。只影响排版呈现，不影响内容质量。",
+    items: {
+      "detailed": ["详细（含分段细讲）", "一句话概括 + 3-6 条核心要点 + 按内容推进分段细讲 + 结论建议。信息最全，适合长视频。"],
+      "brief": ["极简（一句话 + 要点）", "只给一句话概括和 3-5 条要点，不展开细讲。适合快速扫一眼。"],
+      "bullets": ["要点清单", "只输出分层的 Markdown 要点清单，不要长段落。适合直接贴进笔记或汇报。"]
+    }
+  },
+  /* 设置 · 服务商预设 */
+  preset: {
+    label: "服务商预设",
+    desc: "选一家大模型服务商，程序会自动填好接口地址和该家的常用模型名。",
+    items: {
+      "deepseek": ["DeepSeek（推荐）", "国产，便宜，中文好。免费额度够日常试用。填 API Key 即可。"],
+      "moonshot": ["月之暗面 Kimi", "国产，长文本（200 万字）能力强，适合超长视频。"],
+      "qwen": ["通义千问 Qwen", "阿里云旗下，中文理解好，有免费额度。"],
+      "zhipu": ["智谱 GLM", "国产，中文表达自然。"],
+      "siliconflow": ["硅基流动 SiliconFlow", "聚合平台，一个 Key 调多个模型（含 Whisper 语音识别），有免费额度。"],
+      "openai": ["OpenAI 官方", "效果最好，但需要梯子，且国内直连通常不通。"],
+      "ollama": ["Ollama（本地·免费）", "本机跑开源模型，完全免费离线、不联网。代价是质量低一档，且需要 6GB+ 显存。选它会自动填好地址。"],
+      "custom": ["自定义", "自己填 Base URL 和模型名，接任何 OpenAI 兼容的服务（含自建 one-api 网关）。"]
+    }
+  },
+  /* 设置 · 文本来源策略（与主界面 engine 同义，分开写便于独立演进） */
+  asr_engine: {
+    label: "文本来源策略",
+    desc: "同上「文本来源」。设成 auto 最省心；只想验证流程可以临时用 faster-whisper 强制本地。",
+    items: {
+      "auto": ["自动", "字幕优先，其次本地语音识别。推荐。"],
+      "subtitle": ["仅字幕", "只用现成字幕，拿不到就失败。最快。"],
+      "faster-whisper": ["本地 Whisper", "强制下载音频在本机转写。慢、离线、免费。"],
+      "cloud": ["云端识别", "上传音频到第三方转写。快、准、需 Key、收费。"]
+    }
+  },
+  /* 设置 · 模型大小 —— 用户点名要释义的 */
+  asr_model_size: {
+    label: "本地模型大小",
+    desc: "语音识别用的模型规格。<b>越大的越准，也越慢、占空间。</b>数字是模型文件本身的体积。",
+    items: {
+      "tiny": ["极简", "约 75 MB ｜ 11 分钟视频约 30 秒转完 ｜ 准确度最低：只能听出个大概，专有名词基本认不出，句子经常缺字。<b>只适合快速试水或纯背景音视频。</b>"],
+      "base": ["偏小", "约 145 MB ｜ 11 分钟视频约 1 分钟 ｜ 准确度一般：能听清主干，细节（数字、术语、人名）容易错。<b>比 tiny 稳，仍不建议正式用。</b>"],
+      "small": ["均衡（推荐）", "约 480 MB ｜ 11 分钟视频约 2.5 分钟 ｜ 准确度够用：中文日常语句基本能对。<b>默认选它，性价比最高。</b>"],
+      "medium": ["偏大", "约 1.5 GB ｜ 11 分钟视频约 8 分钟 ｜ 准确度明显更好：口语化表达和专有名词错得少。<b>赶时间的话等不了。</b>"],
+      "large-v3": ["最大", "约 3 GB ｜ 11 分钟视频约 20 分钟 ｜ 准确度最好，接近人工听写。<b>CPU 上很慢，建议有独显再用。</b>"]
+    }
+  },
+  /* 设置 · 其它字段的悬浮说明 */
+  asr_cloud_preset: {
+    label: "云端服务商",
+    desc: "选一家自动填好 Base URL 和模型名，你只需贴 Key。<b>这是最快的填法</b>，不用去查 API 文档。",
+    items: {
+      "（不启用云端）": ["不用云端", "只用本地 Whisper。慢但免费。20 分钟音频约 6 分钟。"],
+      "siliconflow": ["硅基流动（推荐）", "SenseVoiceSmall 中文识别好，**目前免费**。需实名认证。Key 在 cloud.siliconflow.cn 左侧「API Key」新建。"],
+      "groq": ["Groq", "whisper-large-v3-turbo，免费 8 小时/天。⚠️ **免费版单文件仅 25MB（约 13 分钟）**，长视频会失败。"],
+      "openai": ["OpenAI", "whisper-1，效果好但**无免费额度**，$0.006/分钟且需美元卡。"],
+      "custom": ["自定义", "自己填 Base URL 和模型名，接任何 OpenAI 兼容服务（含自建 one-api 网关）。"]
+    }
+  },
+  asr_hf_endpoint: ["模型下载镜像", "从 Hugging Face 下载语音模型的地址。国内直连通常超时，默认已用国内镜像 hf-mirror.com。下载失败时在这里换。"],
+  asr_cloud_base_url: ["云端 ASR Base URL", "<b>一般不用自己填</b>——先在上面的「云端服务商」里选一家，会自动填好这三项。<br><br>实在要手填，记一条：<b>必须是 <code>api.</code> 开头的 API 域名</b>，不是 <code>cloud.</code>。硅基流动是 <code>https://api.siliconflow.cn/v1</code>。填成控制台页面地址（cloud.xxx.cn/me/account/ak）会返回网页源码，程序会报「未返回识别文本」。"],
+  asr_cloud_api_key: ["云端 ASR Key", "云端语音识别的密钥。<b>和上面的「大模型 API Key」是两回事</b>——这里是转写音频用的，填错服务商的 Key 会返回 401。<br><br>去哪拿：硅基流动 → <code>cloud.siliconflow.cn</code> 登录 → 左侧「API Key」→ 新建一个（<code>sk-</code> 开头）→ <b>免费模型需先完成实名认证</b>。"],
+  asr_cloud_model: ["云端 ASR 模型", "<b>一般不用自己填</b>，选服务商会自动填。必须用该服务商实际有的模型名，填错会报「Model does not exist」。<br><br>常见可用值：<br>· 硅基流动 → <code>FunAudioLLM/SenseVoiceSmall</code>（中文好，<b>目前免费</b>）<br>· 硅基流动 → <code>Qwen/Qwen3-ASR-1.7B</code>（备选）<br>· Groq → <code>whisper-large-v3-turbo</code>（⚠️ 免费版单文件仅 25MB，约 13 分钟）<br>· OpenAI → <code>whisper-1</code>（无免费额度）<br><br>注意硅基流动<b>没有</b> whisper 系列。"],
+  llm_base_url: ["Base URL", "大模型接口地址。<b>OpenAI 格式的是以 /v1 结尾</b>，例如 https://api.deepseek.com/v1。选预设会自动填。"],
+  llm_api_key: ["API Key", "大模型的密钥。留空则自动退回本地抽取式摘要（免费但质量低）。<b>存在 config.json，别提交到 git。</b>"],
+  llm_model: ["模型名", "具体调哪个模型，例如 deepseek-chat、qwen2.5:7b。选预设会自动填常用值。"],
+  media_ffmpeg_path: ["ffmpeg 路径", "抽音频用的外部程序。<b>留空自动探测</b>，程序自带一份，一般不用填。"],
+  media_proxy: ["HTTP 代理", "访问 YouTube 等海外站点时用，例如 http://127.0.0.1:7890。国内平台不用填。"],
+  ck_bilibili: ["哔哩哔哩 Cookie", "B 站登录态。<b>填了才能拿到官方字幕</b>（从浏览器 F12 → 网络 → 任意请求 → 请求头复制）。不填会自动改走音频识别。"],
+  ck_douyin: ["抖音 Cookie", "<b>抖音风控最严，不填几乎必然抓不到内容。</b><br><br>拿法：浏览器登录 douyin.com → F12 → <b>Network</b> → 刷新页面 → 点任意 douyin.com 请求 → <b>Request Headers</b> → 复制 <code>cookie:</code> 整行的值。<br><br>⚠️ Cookie ≈ 登录凭证，别发给别人。<br>⚠️ <b>几天到几周会过期</b>，再遇风控第一反应是重新复制，不是程序坏了。"],
+  ck_kuaishou: ["快手 Cookie", "快手登录态，<b>需含 <code>did</code>、<code>kuaishou.server.web_st</code> 两个字段</b>（在 Request Headers 的 cookie 行里搜 <code>did=</code> 确认）。缺了仍会失败。拿法同抖音。"],
+  ck_xiaohongshu: ["小红书 Cookie", "小红书登录态。<b>图文笔记的正文和源地址都强依赖它</b>，不填通常只能拿到标题。拿法同抖音。"],
+
+  /* 设置 · Obsidian 知识库 */
+  obs_vault_path: ["库路径", "Obsidian 库的根目录，也就是<b>含 .obsidian 文件夹的那一层</b>（如 D:\\KnowledgeBase）。留空会自动探测，一般不用填。"],
+  obs_focus: ["关注方向", "告诉 AI 筛选器你在关心什么，它据此判断内容值不值得存。<b>这一栏直接决定知识库质量</b>，例如「LLM推理优化, 向量检索, 求职面试」。留空则按通用标准评判。"],
+  obs_folder_high: ["精选目录", "80 分以上内容写入的子目录。默认 <b>20-精选</b>。目录不存在会自动创建。"],
+  obs_folder_mid: ["待定目录", "60-80 分内容先放这里，等你复看后再决定去留。默认 <b>30-待定</b>。<b>建议两周内清理一次，别让这里变成停车场。</b>"],
+  obs_folder_moc: ["索引目录", "视频索引笔记放这里，与已有的导航首页并列。默认 00-MOC。"],
+  obs_threshold_high: ["精选阈值", "评分 ≥ 该值进精选目录。<b>调高更严格</b>，知识库增长慢但干净。默认 80。"],
+  obs_threshold_low: ["待阅阈值", "评分 ≥ 该值进待阅目录；低于该值<b>不写任何文件</b>，只在结果区提示。默认 40。"],
+  obs_enabled: ["自动入库", "打开后每次总结完自动筛选并写入。关掉就是总结完手动点「存入知识库」。"],
+
+  /* 严格度用 true/false 当值，专为下拉框写一组释义 */
+  obs_strict_mode: {
+    label: "入库严格度",
+    desc: "AI 筛选时打分偏严还是偏松。<b>知识库宁可小而精</b>，别三个月后变成垃圾场。",
+    items: {
+      "true": ["严格（推荐）", "只有内容对你关注的领域有明确增量才给高分。一般性、无关的、娱乐类内容一律不入库。<b>知识库宁可小而精，别三个月后变成垃圾场。</b>"],
+      "false": ["宽松", "只要有实质信息就收进来。知识库增长快，但需要你之后自己清理。"]
+    }
+  }
+};
+
+function termOf(name, val) {
+  var t = TERMS[name];
+  if (!t) return null;
+  if (t.items && t.items[val]) return t.items[val];
+  return null;
+}
+
+/* ---------- 跟随鼠标的气泡 ---------- */
+var TIP = null;
+function tipShow(html, ev) {
+  if (!TIP) { TIP = document.createElement("div"); TIP.id = "tip"; document.body.appendChild(TIP); }
+  TIP.innerHTML = html;
+  TIP.style.display = "block";
+  var w = TIP.offsetWidth, h = TIP.offsetHeight;
+  /* 事件对象可能缺坐标（键盘触发、程序化派发），此时贴到元素右下方 */
+  var hasPos = ev && (typeof ev.clientX === "number" || typeof ev.pageX === "number");
+  var x, y;
+  if (hasPos) {
+    x = (typeof ev.clientX === "number" ? ev.clientX : ev.pageX) + 14;
+    y = (typeof ev.clientY === "number" ? ev.clientY : ev.pageY) + 18;
+  } else {
+    x = 40; y = 40;
+  }
+  if (x + w > document.documentElement.clientWidth - 8) x = (hasPos ? x - w - 28 : 8);
+  if (y + h > document.documentElement.clientHeight - 8) y = (hasPos ? y - h - 30 : 8);
+  if (x < 6) x = 6;
+  if (y < 6) y = 6;
+  TIP.style.left = x + "px";
+  TIP.style.top = y + "px";
+}
+function tipHide() { if (TIP) TIP.style.display = "none"; }
+
+/* 给一个元素挂上悬浮说明；html 由调用方拼好 */
+function bindTip(el, getHtml) {
+  if (!el) return;
+  el.onmouseover = function (ev) { tipShow(getHtml(), ev); };
+  el.onmousemove = function (ev) { if (TIP && TIP.style.display === "block") tipShow(getHtml(), ev); };
+  el.onmouseout = tipHide;
+}
+
+/* ---------- 字段旁的问号 ---------- */
+function qMark(label, tipKey) {
+  return "<i class='q' data-label=\"" + esc(label) + "\" data-key=\"" + esc(tipKey) + "\">?</i>";
+}
+
+/* 统一取一个术语的说明文字。
+   TERMS 里有两种写法：
+     - 对象形式 {desc: "..."}          用于字段级说明（Base URL、API Key…）
+     - 数组形式 ["标题", "说明"]         用于下拉选项
+   统一在这里兜住，调用方不用再判断。 */
+function termText(key) {
+  var t = TERMS[key];
+  if (!t) return "";
+  if (typeof t === "string") return t;
+  if (t.desc) return t.desc;          /* 对象形式 */
+  if (t[1]) return t[1];              /* 数组形式的说明在第二项 */
+  return "";
+}
+
+/* 遍历绑定所有问号的悬浮说明。
+   不用事件委托：桌面窗口的 WinForms 后端可能跑在 IE7 兼容模式下，
+   那里没有 document.addEventListener。 */
+function bindQMarks(root) {
+  var list = (root || document).getElementsByTagName("i");
+  for (var i = 0; i < list.length; i++) {
+    (function (el) {
+      if (!el.className || el.className.indexOf("q") < 0) return;
+      var key = el.getAttribute("data-key"), label = el.getAttribute("data-label");
+      var body = termText(key);
+      var html = "<b>" + esc(label) + "</b>" + (body ? "<br>" + body : "");
+      if (!body) return;              /* 没内容就不绑，避免空气泡 */
+      el.onmouseover = function (ev) { tipShow(html, ev); };
+      el.onmousemove = function (ev) { tipShow(html, ev); };
+      el.onmouseout = tipHide;
+    })(list[i]);
+  }
+}
+
+/* ---------- 下拉框：常驻解释行 + 折叠态悬浮 ---------- */
+function bindSelect(sel, key) {
+  if (!sel) return;
+  var row = document.getElementById("expl-" + sel.name);
+  function refresh() {
+    var it = termOf(key, sel.value);
+    if (row) row.innerHTML = it ? "<b>" + esc(it[0]) + "</b> — " + it[1] : "";
+  }
+  function over(ev) {
+    var t = TERMS[key], it = termOf(key, sel.value);
+    if (!t) return;
+    tipShow("<b>" + esc(t.label) + "</b><br>" + (it
+      ? "<b>" + esc(it[0]) + "</b>：" + it[1]
+      : termText(key)), ev);
+  }
+  sel.onchange = refresh;
+  sel.onmouseover = over;
+  sel.onmousemove = function (ev) { if (TIP && TIP.style.display === "block") over(ev); };
+  sel.onmouseout = tipHide;
+  refresh();
+}
+
+function xhr(method, url, data, cb) {
+  var r = new XMLHttpRequest();
+  r.open(method, url, true);
+  r.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+  r.onreadystatechange = function () {
+    if (r.readyState === 4) {
+      var obj = null;
+      try { obj = JSON.parse(r.responseText); } catch (e) { obj = { error: r.responseText }; }
+      cb(obj, r.status);
+    }
+  };
+  r.send(data ? JSON.stringify(data) : null);
+}
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/* 极简 Markdown -> HTML：够用即可，不引入外部库 */
+function md2html(src) {
+  var lines = String(src || "").split("\n"), out = [], inList = false, inCode = false;
+  function closeList() { if (inList) { out.push("</ul>"); inList = false; } }
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (/^```/.test(line)) { out.push(inCode ? "</code></pre>" : "<pre><code>"); inCode = !inCode; continue; }
+    if (inCode) { out.push(esc(line)); continue; }
+    if (/^\s*$/.test(line)) { closeList(); continue; }
+    if (/^###\s+/.test(line)) { closeList(); out.push("<h3>" + inline(line.replace(/^###\s+/, "")) + "</h3>"); continue; }
+    if (/^##\s+/.test(line)) { closeList(); out.push("<h2>" + inline(line.replace(/^##\s+/, "")) + "</h2>"); continue; }
+    if (/^#\s+/.test(line)) { closeList(); out.push("<h1>" + inline(line.replace(/^#\s+/, "")) + "</h1>"); continue; }
+    if (/^\s*[-*]\s+/.test(line)) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push("<li>" + inline(line.replace(/^\s*[-*]\s+/, "")) + "</li>"); continue;
+    }
+    if (/^>/.test(line)) { closeList(); out.push("<blockquote>" + inline(line.replace(/^>\s?/, "")) + "</blockquote>"); continue; }
+    if (/^-{3,}$/.test(line)) { closeList(); out.push("<hr>"); continue; }
+    closeList();
+    out.push("<p>" + inline(line) + "</p>");
+  }
+  closeList();
+  if (inCode) out.push("</code></pre>");
+  return out.join("");
+}
+
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[(\d+:\d+(:\d+)?)\]/g, "<code>$1</code>");
+}
+
+/* ---------------- 拖拽 / 选择文件 ----------------
+   为什么是「上传字节」而不是「把文件路径传给后端」：
+   浏览器出于安全**不会**告诉网页被拖进来文件的真实路径
+   （`file.path` 是 Electron/pywebview 私有的，标准浏览器没有）。
+   所以只能把字节传到后端、由后端落盘，再把落盘路径送进流水线。
+   这么做的另一个好处：桌面窗口（WebView2）和浏览器打开时行为完全一致。 */
+var ATTACH = null;          /* {path, name, size, kind} —— 已上传到后端的文件 */
+
+function fmtSize(n) {
+  if (n === null || n === undefined || isNaN(n)) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(1) + " MB";
+}
+
+function setAttach(info) {
+  ATTACH = info;
+  $("attachName").innerHTML = esc(info.name);
+  $("attachSize").innerHTML = fmtSize(info.size);
+  $("attach").className = "attach on";
+  /* 附件与输入框是「二选一」：留下旧链接会让用户以为两个都要处理。
+     而 start() 只认一个，所以这里直接清空输入框，避免误解。 */
+  $("input").value = "";
+}
+
+function clearAttach() {
+  ATTACH = null;
+  $("attach").className = "attach";
+  $("attachName").innerHTML = "";
+  $("attachSize").innerHTML = "";
+}
+
+function uploadFile(file, cb) {
+  var fr = new FileReader();
+  fr.onload = function () {
+    var r = new XMLHttpRequest();
+    r.open("POST", "/api/upload", true);
+    r.setRequestHeader("Content-Type", "application/octet-stream");
+    /* 文件名放请求头。HTTP 头只能是 ASCII，中文名必须先 encodeURIComponent，
+       后端 unquote 还原 —— 否则中文名会乱码，甚至整个请求被拒。 */
+    r.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+    r.onreadystatechange = function () {
+      if (r.readyState !== 4) return;
+      var obj = null;
+      try { obj = JSON.parse(r.responseText); }
+      catch (e) { obj = { error: "服务器返回异常（HTTP " + r.status + "）" }; }
+      cb(obj);
+    };
+    r.send(fr.result);
+  };
+  fr.onerror = function () { cb({ error: "读取本地文件失败" }); };
+  fr.readAsArrayBuffer(file);
+}
+
+function acceptFiles(files) {
+  if (!files || !files.length) return;
+  if (files.length > 1) {
+    setStatus("一次只能处理一个文件，已取第一个：" + files[0].name, "");
+  }
+  var f = files[0];
+  setStatus("正在上传 " + f.name + " …", "");
+  $("hint").className = "hint";
+  $("hint").innerHTML = "";
+  uploadFile(f, function (d) {
+    if (!d || !d.ok) {
+      setStatus((d && d.error) || "上传失败", "err");
+      /* 失败原因（类型不支持 / 太大）要显眼，光在状态行里一闪而过看不清 */
+      $("hint").className = "hint err";
+      $("hint").innerHTML = esc((d && d.hint) || "可以点「选择文件」重试，或把文字直接粘进输入框");
+      return;
+    }
+    setAttach(d);
+    setStatus("已附加：" + d.name + " —— 点「开始总结」", "ok");
+  });
+}
+
+/* 拖拽遮罩。用计数器而不是布尔量：拖过子元素时会连续触发
+   dragenter/dragleave（每个子元素各一对），只用一个布尔量会让遮罩闪个不停。 */
+function hasFiles(e) {
+  var dt = e.dataTransfer;
+  if (!dt) return false;
+  var t = dt.types;
+  if (!t) return false;
+  for (var i = 0; i < t.length; i++) {
+    if (t[i] === "Files" || t[i] === "application/x-moz-file") return true;
+  }
+  return false;
+}
+function showDropMask(on) { $("dropMask").className = on ? "on" : ""; }
+var DROP_DEPTH = 0;
+
+/* 用 onXXX 赋值而不是 addEventListener：桌面窗口的 WinForms 后端
+   可能跑在旧 IE 兼容模式，那里没有 addEventListener。 */
+document.ondragenter = function (e) {
+  if (!hasFiles(e)) return;
+  DROP_DEPTH++;
+  showDropMask(true);
+  if (e.preventDefault) e.preventDefault();
+};
+document.ondragover = function (e) {
+  /* 必须阻止默认行为，否则浏览器会直接「打开」被拖进来的文件，
+     整个界面被那个文件替换掉。 */
+  if (e.preventDefault) e.preventDefault();
+  if (e.dataTransfer) { try { e.dataTransfer.dropEffect = "copy"; } catch (x) {} }
+  if (hasFiles(e)) showDropMask(true);
+};
+document.ondragleave = function (e) {
+  if (!hasFiles(e)) return;
+  DROP_DEPTH--;
+  if (DROP_DEPTH <= 0) { DROP_DEPTH = 0; showDropMask(false); }
+};
+document.ondrop = function (e) {
+  if (e.preventDefault) e.preventDefault();
+  DROP_DEPTH = 0; showDropMask(false);
+  var dt = e.dataTransfer;
+  if (!dt) return;
+  if (dt.files && dt.files.length) { acceptFiles(dt.files); return; }
+  /* 拖进来的是链接/一段文字 → 填进输入框，走原有的链接流程。
+     这样「从浏览器地址栏拖个链接过来」也能用。 */
+  var txt = "";
+  try { txt = dt.getData("text/uri-list") || dt.getData("text/plain") || ""; } catch (x) {}
+  var lines = String(txt).split(/\r?\n/), first = "";
+  for (var i = 0; i < lines.length; i++) {
+    var s = lines[i].replace(/^\s+|\s+$/g, "");
+    if (s && s.charAt(0) !== "#") { first = s; break; }
+  }
+  if (first) {
+    clearAttach();
+    $("input").value = first;
+    setStatus("已填入输入框，点「开始总结」", "ok");
+  }
+};
+
+/* ---------------- 任务 ---------------- */
+function start() {
+  var text = $("input").value.replace(/^\s+|\s+$/g, "");
+  /* 输入框优先（用户可能刚改了内容），没填才用附加的文件。
+     附加文件的 path 是后端落盘路径，流水线会按「本地文档」处理。 */
+  if (!text && ATTACH) text = ATTACH.path;
+  if (!text) { setStatus("请先粘贴链接，或把文件拖进来", "err"); return; }
+  stopPoll();
+  $("result").innerHTML = '<span style="color:#6e7781">正在生成…</span>';
+  $("meta").innerHTML = "";
+  $("bar").style.width = "2%";
+  $("btnRun").disabled = true; $("btnCancel").disabled = false;
+  $("btnCopy").disabled = true; $("btnExport").disabled = true;
+  $("btnVault").disabled = true; $("btnVaultForce").disabled = true;
+  $("btnVaultForce").style.display = "none";
+  $("vaultMsg").innerHTML = "";
+  setStatus("提交中…", "");
+
+  xhr("POST", "/api/summarize", { text: text }, function (d) {
+    if (d && d.task_id) { TASK = d.task_id; poll(); }
+    else { setStatus((d && d.error) || "提交失败", "err"); finishUI(); }
+  });
+}
+
+function poll() {
+  stopPoll();
+  TIMER = setTimeout(function () {
+    xhr("GET", "/api/status?task_id=" + TASK, null, function (d) {
+      if (!d || d.error) { setStatus((d && d.error) || "状态查询失败", "err"); finishUI(); return; }
+      $("bar").style.width = (d.percent || 0) + "%";      setStatus(d.message || "", d.state === "error" ? "err" : (d.state === "done" ? "ok" : ""));
+      /* 失败时给 hint 加 .err 让它显眼 —— 它说的是"下一步该做什么"。
+         .err 里有 white-space:pre-wrap，所以直接塞原文即可，
+         不要再 replace 成 <br>，否则会多出一堆空行。 */
+      $("hint").className = d.state === "error" ? "hint err" : "hint";
+      $("hint").innerHTML = d.hint ? esc(d.hint) : "";
+
+      /* 平台风控（抖音/快手/小红书）是「操作问题」而非「程序问题」——
+         光给一大段文字说明不够，得给一个直达现场的按钮。
+         这里只在这两种状态下出现，其他错误不打扰用户。 */
+      if (d.state === "error" && d.hint && /cookie|Cookie|风控|验证/.test(d.hint)) {
+        var b = document.createElement("button");
+        b.textContent = "去设置 → 填抖音 Cookie";
+        b.style.margin = "8px 8px 0 0";
+        b.onclick = function () {
+          openSettings();
+          // 打开后再滚动到抖音那一栏并短暂高亮，否则用户还得自己找
+          setTimeout(function () {
+            var f = document.getElementsByName("ck_douyin")[0];
+            if (!f) return;
+            f.scrollIntoView({ block: "center" });
+            f.style.borderColor = "#d1242f";
+            f.style.boxShadow = "0 0 0 3px rgba(209,36,47,.15)";
+            setTimeout(function () {
+              f.style.borderColor = "";
+              f.style.boxShadow = "";
+            }, 4000);
+            f.focus();
+          }, 220);
+        };
+        $("hint").appendChild(b);
+      }
+      if (d.text) $("result").innerHTML = md2html(d.text);
+      if (d.state === "running") { poll(); return; }
+      if (d.state === "done") {
+        var r = d.result || {};
+        var t = r.transcript || {}, m = r.meta || {};
+        var html = '<span>文本来源：</span><b>' + esc(srcLabel(t.source)) + "</b>"
+          + "（" + esc(t.engine || "-") + "，" + (t.char_count || 0) + " 字）"
+          + '<span style="margin-left:16px">摘要引擎：</span><b>' + esc(r.summary_engine || "-") + "</b>"
+          + '<span style="margin-left:16px">耗时：</span>' + (r.elapsed_seconds || 0) + " 秒"
+          + '<span style="margin-left:16px">标题：</span>' + esc(m.title || "-");
+        if (t.notes && t.notes.length) {
+          /* ASR 失败时的备注是多行的「原因 + 音频路径 + 下一步」，
+             必须用 note 样式保住换行，否则挤成一行根本读不出来。 */
+          html += '<div class="hint note">' + esc(t.notes.join("\n")) + "</div>";
+        }
+        $("meta").innerHTML = html;
+        $("btnCopy").disabled = false; $("btnExport").disabled = false;
+        $("btnVault").disabled = false;
+        /* 自动入库已经在后端做完了，这里按结果显示 */
+        showVaultResult(r.obsidian);
+        finishUI();
+      } else {
+        setStatus(d.error || "失败", "err"); finishUI();
+      }
+    });
+  }, 500);
+}
+
+function srcLabel(s) {
+  return { subtitle: "视频字幕", asr: "语音识别", metadata: "标题/简介元信息",
+           mixed: "多来源合并", comments: "弹幕评论" }[s] || s;
+}
+
+/* ---------------- 知识库入库 ---------------- */
+/* 展示后端返回的筛选结果。低分时把「强制存入」按钮露出来 ——
+   AI 会误判是常事，得给你留个推翻它的口子。 */
+function showVaultResult(info) {
+  var box = $("vaultMsg");
+  if (!box) return;
+  if (!info || !info.ok) {
+    box.innerHTML = info && info.message
+      ? '<span style="color:#d1242f">知识库：</span>' + esc(info.message) : "";
+    $("btnVaultForce").style.display = "none";
+    return;
+  }
+  if (info.skipped) {
+    box.innerHTML = '<span style="color:#9a6700">未入库：</span>' + esc(info.message || "")
+      + ' <a href="#" id="lnkForce" style="color:#1f6feb">强制存入精选</a>';
+    var a = $("lnkForce");
+    if (a) a.onclick = function (ev) { ev.preventDefault(); doVault(true); };
+    $("btnVaultForce").style.display = "none";
+    return;
+  }
+  var h = '<span style="color:#1a7f37">已入库：</span>' + esc(info.message || "");
+  if (info.reason) h += '<div class="hint">筛选理由：' + esc(info.reason) + "</div>";
+  if (info.entities && info.entities.length) {
+    h += '<div class="hint">识别到的概念（AI 检索锚点）：'
+       + esc(info.entities.join(" · ")) + "</div>";
+  }
+  if (info.note) h += '<div class="hint">' + esc(info.note) + "</div>";
+  box.innerHTML = h;
+  $("btnVaultForce").style.display = "none";
+}
+
+function doVault(force) {
+  if (!TASK) return;
+  $("btnVault").disabled = true;
+  $("btnVaultForce").disabled = true;
+  $("vaultMsg").innerHTML = '<span style="color:#6e7781">'
+    + (force ? "正在强制存入…" : "正在由 AI 判断是否值得入库…") + "</span>";
+  xhr("POST", "/api/obsidian", { task_id: TASK, force: !!force }, function (d) {
+    $("btnVault").disabled = false;
+    $("btnVaultForce").disabled = false;
+    if (!d || d.error) {
+      $("vaultMsg").innerHTML = '<span style="color:#d1242f">入库失败：</span>'
+        + esc((d && d.error) || "未知错误");
+      return;
+    }
+    showVaultResult(d);
+  });
+}
+
+function stopPoll() { if (TIMER) { clearTimeout(TIMER); TIMER = null; } }
+function finishUI() { $("btnRun").disabled = false; $("btnCancel").disabled = true; }
+function setStatus(msg, cls) {
+  var el = $("status"); el.className = "status" + (cls ? " " + cls : "");
+  el.innerHTML = esc(msg);
+}
+
+/* ---------------- 设置 ---------------- */
+function loadConfig(cb) {
+  xhr("GET", "/api/config", null, function (d) {
+    CFG = (d && d.config) || {};
+    /* 后端会带上 vault 探测结果，设置页要用它显示库状态 */
+    CFG.obsidian_status = (d && d.obsidian) || {};
+    /* 配置文件在磁盘上的位置。要显示出来，用户才知道「关注方向」等设置
+       到底存在哪个文件、能不能直接拿记事本改。 */
+    CFG.cfgPath = (d && d.config_path) || "";
+    CFG.cfgCreated = !!(d && d.config_created);
+    READY = true;
+    if (cb) cb(d);
+  });
+}
+
+function openSettings() {
+  if (!READY) { loadConfig(openSettings); return; }
+  var c = CFG, l = c.llm || {}, a = c.asr || {}, m = c.media || {}, ck = c.cookies || {};
+  /* 顶部先把「配置存在哪」说清楚：用户改关注方向时，得知道这份东西是磁盘上一个
+     可以自己编辑的文件，而不是被写死在 exe 里。 */
+  var h = "<div class='hint'>配置文件：<code>" + esc(c.cfgPath || "（尚未生成，点保存后出现）") + "</code>"
+        + (c.cfgCreated ? " <b>（本次已自动生成一份默认配置）</b>" : "")
+        + "<br>可直接用记事本编辑，改完<b>重启程序</b>生效。"
+        + "「关注方向」等全部设置都存在这个文件里，随时可改、可备份、可随程序一起拷走。</div>";
+  h += "<h3>大模型（决定总结质量）</h3>";
+  h += sel("服务商预设", "preset", ["deepseek", "moonshot", "qwen", "zhipu", "siliconflow", "openai", "ollama", "custom"], l.preset, "preset", true);
+  h += txt("Base URL", "llm_base_url", l.base_url);
+  h += txt("API Key", "llm_api_key", l.api_key, true);
+  h += txt("模型名", "llm_model", l.model);
+  h += "<div class='hint'>不填 API Key 也能用（自动退回本地抽取式摘要），"
+     + "但质量明显不如大模型。Ollama 等本地服务随便填个 Key 即可。</div>";
+  h += "<h3>语音识别</h3>";
+  h += sel("文本来源策略", "asr_engine", ["auto", "subtitle", "faster-whisper", "cloud"], a.engine, "asr_engine", true);
+  h += sel("本地模型大小", "asr_model_size", ["tiny", "base", "small", "medium", "large-v3"], a.model_size, "asr_model_size", true);
+  h += txt("模型下载镜像", "asr_hf_endpoint", a.hf_endpoint);
+  h += sel("云端服务商", "asr_cloud_preset",
+           ["（不启用云端）", "siliconflow", "groq", "openai", "custom"],
+           a.cloud_base_url ? guessCloudPreset(a.cloud_base_url) : "",
+           "asr_cloud_preset", true);
+  h += txt("云端 ASR Base URL", "asr_cloud_base_url", a.cloud_base_url);
+  h += txt("云端 ASR Key", "asr_cloud_api_key", a.cloud_api_key, true);
+  h += txt("云端 ASR 模型", "asr_cloud_model", a.cloud_model);
+  h += "<div class='hint'><b>云端转写比本地快两个数量级</b>：20 分钟音频本地 CPU 约 6 分钟，"
+     + "云端约 3-10 秒，且专名识别明显更准。<br>"
+     + "用法：选服务商 → 复制它的 Key 贴进 Key 栏 → 保存。硅基流动需先实名认证。"
+     + "速度对比：本地 small 384 秒 vs 云端 2.3 秒（实测 4 分钟音频）。</div>";
+  h += "<h3>媒体与网络</h3>";
+  h += txt("ffmpeg 路径", "media_ffmpeg_path", m.ffmpeg_path);
+  h += txt("HTTP 代理", "media_proxy", m.proxy);
+  h += "<h3>平台 Cookie（遇风控时填）</h3>";
+  /* Cookie 一律用 taLong（textarea）：这些值普遍上千字符，
+     input[type=text] 粘贴会被浏览器截到 1024 且不提示。 */
+  h += taLong("哔哩哔哩", "ck_bilibili", ck.bilibili);
+  h += taLong("抖音", "ck_douyin", ck.douyin);
+  h += taLong("快手", "ck_kuaishou", ck.kuaishou);
+  h += taLong("小红书", "ck_xiaohongshu", ck.xiaohongshu);
+  var ob = c.obsidian || {};
+  h += "<h3>Obsidian 知识库</h3>";
+  h += "<div class='hint'>总结完由 AI 判断<b>值不值得存</b>，分三档处理：高分进精选目录、"
+     + "中等进待阅目录、低分<b>不写文件</b>。知识库要靠筛选保持干净。</div>";
+  h += chk("自动入库", "obs_enabled", ob.enabled);
+  h += txt("库路径", "obs_vault_path", ob.vault_path);
+  h += ta("关注方向", "obs_focus", ob.focus,
+          "例：LLM推理优化, 向量检索, RAG, 求职面试准备");
+  h += sel("入库严格度", "obs_strict", ["true", "false"],
+           ob.strict === false ? "false" : "true", "obs_strict_mode", true);
+  h += txt("精选阈值", "obs_threshold_high", ob.threshold_high);
+  h += txt("待阅阈值", "obs_threshold_low", ob.threshold_low);
+  h += txt("精选目录", "obs_folder_high", ob.folder_high);
+  h += txt("待阅目录", "obs_folder_mid", ob.folder_mid);
+  h += txt("索引目录", "obs_folder_moc", ob.folder_moc);
+  h += "<div class='hint' id='obsStat'></div>";
+  h += "<div class='btns'><button class='primary' id='btnSaveCfg'>保存</button>"
+     + "<button id='btnCancelCfg'>取消</button><span id='cfgMsg' class='hint'></span></div>";
+  show(h);
+  /* 绑定释义：下拉框 → 常驻解释行 + 悬浮气泡 */
+  bindSelect(document.getElementsByName("preset")[0], "preset");
+  bindSelect(document.getElementsByName("asr_engine")[0], "asr_engine");
+  bindSelect(document.getElementsByName("asr_model_size")[0], "asr_model_size");
+  bindSelect(document.getElementsByName("obs_strict")[0], "obs_strict_mode");
+  /* 库状态：让用户一眼看到库在哪、有多少篇、筛选能不能用 */
+  var os = $("obsStat");
+  if (os) {
+    var st = (CFG.obsidian_status || {});
+    if (!st.found) {
+      os.innerHTML = "<b style='color:#d1242f'>未找到 Obsidian 库</b>。"
+                   + (st.message ? esc(st.message) : "请在 Obsidian 里创建库后填写库路径。");
+    } else {
+      os.innerHTML = "库：<code>" + esc(st.vault) + "</code> ｜ 已入库 <b>" + st.note_count
+                   + "</b> 篇 ｜ 筛选："
+                   + (st.llm_ready ? "<b>AI 可用</b>"
+                                   : "未配大模型，用保守的本地打分"
+                                     + (st.message ? "（" + esc(st.message) + "）" : ""));
+    }
+  }
+  var ps = document.getElementsByName("preset")[0];
+  if (ps) {
+    var prevPreset = ps.onchange;
+    ps.onchange = function () {
+      if (prevPreset) prevPreset();
+      var p = ps.value;
+      if (p === "ollama") {
+        document.getElementsByName("llm_base_url")[0].value = "http://localhost:11434/v1";
+        if (!document.getElementsByName("llm_api_key")[0].value) {
+          document.getElementsByName("llm_api_key")[0].value = "ollama";
+        }
+        if (!document.getElementsByName("llm_model")[0].value) {
+          document.getElementsByName("llm_model")[0].value = "qwen2.5:7b";
+        }
+      }
+      // 切换服务商后解释行要跟着变
+      var row = document.getElementById("expl-preset");
+      var it = termOf("preset", p);
+      if (row && it) row.innerHTML = "<b>" + esc(it[0]) + "</b> — " + it[1];
+    };
+  }
+
+  // 云端 ASR 服务商：选一家自动填 Base URL 与模型名。
+  // 没有这个下拉框时，用户只能对着三个空框猜 —— 之前就因为把密钥管理页
+  // 地址当成 Base URL 而失败（返回 HTML 而非 JSON，报错完全指不到原因）。
+  var cps = document.getElementsByName("asr_cloud_preset")[0];
+  if (cps) {
+    var prevCps = cps.onchange;
+    cps.onchange = function () {
+      if (prevCps) prevCps();
+      var p = cps.value, f = CLOUD_ASR_PRESETS[p];
+      if (f) {
+        document.getElementsByName("asr_cloud_base_url")[0].value = f.base_url;
+        document.getElementsByName("asr_cloud_model")[0].value = f.model;
+      } else if (p === "（不启用云端）") {
+        document.getElementsByName("asr_cloud_base_url")[0].value = "";
+        document.getElementsByName("asr_cloud_model")[0].value = "";
+      }
+      var row = document.getElementById("expl-asr_cloud_preset");
+      var it = termOf("asr_cloud_preset", p);
+      if (row && it) {
+        var extra = f ? "<br><b>已自动填入：</b>" + esc(f.base_url) + " ｜ " + esc(f.model)
+                      + "<br><b>剩下要做的：</b>把 Key 粘进下面的「云端 ASR Key」栏。"
+                      + f.key_hint : "";
+        row.innerHTML = "<b>" + esc(it[0]) + "</b> — " + it[1] + extra;
+      }
+    };
+  }
+  $("btnSaveCfg").onclick = saveConfig;
+  $("btnCancelCfg").onclick = hide;
+}
+
+function txt(label, name, val, pwd) {
+  var t = TERMS[name];
+  var h = "<div class='field'><span>" + label
+     + (t ? qMark(label, name) : "") + "</span>"
+     + "<input type='" + (pwd ? "password" : "text")
+     + "' name='" + name + "' value='" + esc(val == null ? "" : val) + "'></div>";
+  /* 解释行：数组形式（[标题, 说明]）取第二项，对象形式取 desc */
+  if (t) h += "<div class='expl'>" + (t.desc || (t[1] || "")) + "</div>";
+  return h;
+}
+
+/* 长文本（Cookie 这类）。必须用 textarea 而不是 input[type=text]：
+   浏览器对单行输入框的粘贴内容有长度上限（Chrome 约 1024 字符），
+   而抖音 Cookie 普遍 1300+ 字符 —— 粘进去会被静默截断，
+   表现是「填了但解析仍失败」，且界面上完全看不出少了东西。
+   textarea 同样有 maxlength 限制（默认 500万），足够用。 */
+function taLong(label, name, val) {
+  var t = TERMS[name];
+  var h = "<div class='field col'><span>" + label
+     + (t ? qMark(label, name) : "") + "</span>"
+     + "<textarea name='" + name + "' rows='3' placeholder='粘贴整行 Cookie（不要带 cookie: 前缀）'>"
+     + esc(val == null ? "" : val) + "</textarea></div>";
+  if (t) h += "<div class='expl'>" + (t.desc || (t[1] || "")) + "</div>";
+  return h;
+}
+
+/* 多行文本（关注方向这类要写一段的话） */
+function ta(label, name, val, placeholder) {
+  var t = TERMS[name];
+  var h = "<div class='field col'><span>" + label
+    + (t ? qMark(label, name) : "") + "</span>"
+    + "<textarea name='" + name + "' rows='2' placeholder='"
+    + esc(placeholder || "") + "'>"
+    + esc(val == null ? "" : val) + "</textarea></div>";
+  if (t) h += "<div class='expl'>" + (t.desc || (t[1] || "")) + "</div>";
+  return h;
+}
+
+/* 单个勾选框 */
+function chk(label, name, on) {
+  var t = TERMS[name];
+  var h = "<div class='field check'><span>" + label
+    + (t ? qMark(label, name) : "") + "</span>"
+    + "<input type='checkbox' name='" + name + "'"
+    + (on ? " checked" : "") + "></div>";
+  if (t) h += "<div class='expl'>" + (t.desc || (t[1] || "")) + "</div>";
+  return h;
+}
+
+/* 生成带释义的下拉框。
+   opts   : 原始 value 数组
+   key    : TERMS 里的键名
+   inline : true 时把「含义」直接拼进选项文字（展开下拉时就能看到，
+            因为 Windows 的下拉列表是系统原生层，HTML 气泡盖不上去） */
+/* 云端 ASR 服务商预设。必须与 Python 侧 src/vsum/asr/cloud.py 的
+   CLOUD_ASR_PRESETS 保持一致 —— 这里改了那边不改，界面填的值会失效。
+   陷阱提醒：Base URL 必须是 api. 开头的 API 域名。填成 cloud.xxx.cn/me/account/ak
+   这类控制台页面地址，服务器会返回 200 + HTML，程序拿不到识别文本。 */
+var CLOUD_ASR_PRESETS = {
+  siliconflow: {
+    label: "硅基流动",
+    base_url: "https://api.siliconflow.cn/v1",
+    model: "FunAudioLLM/SenseVoiceSmall",
+    key_hint: "登录 cloud.siliconflow.cn → 左侧「API Key」→ 新建（sk- 开头）。<b>免费模型需先实名认证。</b>"
+  },
+  groq: {
+    label: "Groq",
+    base_url: "https://api.groq.com/openai/v1",
+    model: "whisper-large-v3-turbo",
+    key_hint: "console.groq.com/keys 新建。<b>注意免费版单文件仅 25MB（约 13 分钟），长视频会失败。</b>"
+  },
+  openai: {
+    label: "OpenAI",
+    base_url: "https://api.openai.com/v1",
+    model: "whisper-1",
+    key_hint: "platform.openai.com 新建。<b>无免费额度，$0.006/分钟且需美元卡。</b>"
+  }
+};
+
+/* 从已填的 Base URL 反推该选哪个服务商（配置里没存 preset 字段时用） */
+function guessCloudPreset(url) {
+  var u = (url || "").toLowerCase();
+  if (!u) return "";
+  if (u.indexOf("siliconflow") >= 0) return "siliconflow";
+  if (u.indexOf("groq") >= 0) return "groq";
+  if (u.indexOf("openai") >= 0) return "openai";
+  return "custom";
+}
+
+function sel(label, name, opts, cur, key, inline) {
+  var t = TERMS[key] || {};
+  var h = "<div class='field'><span>" + label
+    + (key ? qMark(label, key) : "") + "</span><select name='" + name + "'>";
+  for (var i = 0; i < opts.length; i++) {
+    var v = opts[i], it = t.items ? t.items[v] : null;
+    var text = v;
+    if (inline && it) {
+      // 只放短标签，长解释留给悬浮气泡，避免下拉框被撑得过宽
+      text = v + " — " + it[0];
+    }
+    h += "<option value='" + esc(v) + "'" + (v === cur ? " selected" : "")
+       + ">" + esc(text) + "</option>";
+  }
+  h += "</select></div>";
+  if (key) h += "<div class='expl' id='expl-" + name + "'></div>";
+  return h;
+}
+
+function val(name) {
+  var els = document.getElementsByName(name);
+  return els.length ? els[0].value : "";
+}
+
+/* 勾选框取的是 checked 而不是 value */
+function chkVal(name) {
+  var els = document.getElementsByName(name);
+  return els.length ? !!els[0].checked : false;
+}
+
+/* 阈值类输入框：留空或填错时回退到默认值，别把 0 写进配置 */
+function numVal(name, def) {
+  var n = parseInt(val(name), 10);
+  return isNaN(n) ? def : n;
+}
+
+function saveConfig() {
+  var body = {
+    config: {
+      llm: { preset: val("preset"), base_url: val("llm_base_url"), api_key: val("llm_api_key"), model: val("llm_model") },
+      asr: { engine: val("asr_engine"), model_size: val("asr_model_size"), hf_endpoint: val("asr_hf_endpoint"),
+             cloud_base_url: val("asr_cloud_base_url"), cloud_api_key: val("asr_cloud_api_key"),
+             cloud_model: val("asr_cloud_model") },
+      media: { ffmpeg_path: val("media_ffmpeg_path"), proxy: val("media_proxy") },
+      cookies: { bilibili: val("ck_bilibili"), douyin: val("ck_douyin"),
+                 kuaishou: val("ck_kuaishou"), xiaohongshu: val("ck_xiaohongshu") },
+      obsidian: {
+        enabled: chkVal("obs_enabled"),
+        vault_path: val("obs_vault_path"),
+        focus: val("obs_focus"),
+        strict: val("obs_strict") !== "false",
+        threshold_high: numVal("obs_threshold_high", 80),
+        threshold_low: numVal("obs_threshold_low", 60),
+        folder_high: val("obs_folder_high"),
+        folder_mid: val("obs_folder_mid"),
+        folder_moc: val("obs_folder_moc")
+      }
+    }
+  };
+  /* 保存前拦一道：Cookie 被截断过一次（元凶是 input[type=text] 的 1024 上限），
+     截断后表现是「填了但解析仍失败」，用户完全看不出少了东西。
+     这里检查明显的半截状态（>1000 字符却缺少 ttwid），宁可啰嗦也要拦住。 */
+  var ckWarn = "";
+  ["bilibili", "douyin", "kuaishou", "xiaohongshu"].forEach(function (k) {
+    var v = val("ck_" + k) || "";
+    if (v.length > 1000 && v.indexOf("ttwid") < 0 && v.indexOf("sessionid") < 0) {
+      ckWarn += (ckWarn ? "<br>" : "")
+        + "【" + k + "】这段 " + v.length + " 字符，但不含 ttwid / sessionid，"
+        + "很可能是粘贴时被截断了。请重新完整粘贴。";
+    }
+  });
+  if (ckWarn) {
+    $("cfgMsg").innerHTML = ckWarn;
+    $("cfgMsg").className = "hint err";
+    return;
+  }
+
+  xhr("POST", "/api/config", body, function (d) {
+    $("cfgMsg").innerHTML = d && d.ok ? "已保存到 " + esc(d.path) : "保存失败";
+    $("cfgMsg").className = "hint";
+    loadConfig();
+  });
+}
+
+/* ---------------- 平台列表 ---------------- */
+function openPlatforms() {
+  xhr("GET", "/api/platforms", null, function (d) {
+    var rows = (d && d.platforms) || [], h = "<h3>已支持的平台</h3><div class='grid'>";
+    for (var i = 0; i < rows.length; i++) {
+      var p = rows[i], lv = p.support === "full" ? "<span class='lv'>★★★ 完整</span>"
+        : (p.support === "partial" ? "<span class='lv2'>★★ 部分</span>" : "<span class='lv3'>★ 仅元信息</span>");
+      h += "<div><b>" + esc(p.name) + "</b>" + lv + " <span style='color:#6e7781'>"
+        + esc(p.note || "") + "</span><br><span style='color:#8c959f'>域名："
+        + esc((p.domains || []).join(", ")) + "</span></div>";
+    }
+    h += "</div><div class='hint'>通用链接走 yt-dlp，覆盖上千个站点（YouTube / 微博 / 西瓜 / 知乎…）。"
+       + "缺哪个平台就把适配器 .py 丢进 plugins 目录。</div>";
+    show(h);
+  });
+}
+
+function show(html) {
+  $("modalBody").innerHTML = html;
+  $("mask").style.display = "block";
+  bindQMarks($("modalBody"));     /* 弹窗内的问号重新绑定（内容是动态生成的） */
+}
+function hide() { $("mask").style.display = "none"; tipHide(); }
+
+/* ---------------- 术语表 ---------------- */
+var GLOSS = [
+  ["知识库 / Obsidian", "本程序可以把筛选过的视频笔记直接写进 Obsidian 库。<b>Obsidian 的库就是一个普通文件夹</b>，所以不需要装插件、不需要开 Obsidian，程序直接写 .md 文件。"],
+  ["Vault / 库路径", "Obsidian 库的根目录，也就是<b>含 .obsidian 文件夹的那一层</b>。程序靠这个标记认出「这是个库」。"],
+  ["Frontmatter / YAML 头", "笔记开头被 <code>---</code> 包住的那几行属性（如标题、标签、评分）。Obsidian 靠它把笔记当结构化记录查询。<b>没有它，一堆 md 就只是文本堆。</b>"],
+  ["RAG", "Retrieval-Augmented Generation，检索增强生成。先从资料库里召回相关内容，再让模型基于召回内容回答。<b>知识库质量直接决定召回质量。</b>"],
+  ["专实体 / 检索锚点", "领域专有名词（库名、协议名、参数名）。它们是语义检索最有效的匹配锚点 —— <b>没有专名的笔记，AI 几乎检索不到</b>。所以入库时会自动提取。"],
+  ["分级入库", "按 AI 打分分三档：高分进精选目录、中分进待阅目录、低分<b>不写文件</b>。这样知识库靠筛选保持干净，不会越用越乱。"],
+  ["双链 / Wikilink", "Obsidian 的 <code>[[笔记名]]</code> 语法，把两篇笔记连起来，形成知识网络而不是文件堆。程序只会链到<b>确实已存在</b>的笔记。"],
+  ["MOC", "Map of Content，内容索引。一份指向其他笔记的导航页，方便 AI 检索时先定位再取细节。"],
+  ["Whisper / faster-whisper", "OpenAI 开源的语音识别模型，把音频里的声音转成文字。faster-whisper 是同一模型的量化加速版，快 2-4 倍。<b>本地跑，不上传音频。</b>"],
+  ["ASR", "Automatic Speech Recognition，语音识别。把「声音」变成「文字」。本程序里指本地 Whisper 和云端识别这两个引擎。"],
+  ["tiny / base / small / medium / large-v3", "Whisper 的模型规格，体积和精度递增：<b>tiny 75MB 约 30 秒 → small 480MB 约 2.5 分钟 → large-v3 3GB 约 20 分钟</b>（11 分钟视频，CPU）。默认 small。"],
+  ["ffmpeg", "音视频处理工具，本程序用它从视频里抽出音频轨。程序自带一份，不用单独装。"],
+  ["yt-dlp", "开源下载器，能解析上千个网站。本程序用它作为「不认识这个平台时的通用兜底」。"],
+  ["API Key", "调用大模型/云端服务的密钥字符串。<b>等于密码，别发给别人。</b>存在 config.json 里。"],
+  ["Base URL", "接口地址。大模型要填以 <b>/v1</b> 结尾的地址，例如 https://api.deepseek.com/v1。选预设会自动填好。"],
+  ["OpenAI 兼容", "一种接口格式约定。DeepSeek / Kimi / 通义 / 智谱 / 本地 Ollama 都用这套，所以程序只写了一个适配器就能通吃。"],
+  ["Ollama", "本地跑开源大模型的工具。免费、离线、不联网，代价是质量低一档且需要 6GB+ 显存。"],
+  ["Cookie", "浏览器的登录凭证。填了平台的 Cookie 才能拿到登录后才能看的内容（如 B 站官方字幕）。"],
+  ["风控", "平台的反爬/防滥用机制。抖音快手小红书无 Cookie 时常被拦，只能拿到标题——这是平台限制，不是程序问题。"],
+  ["VAD", "Voice Activity Detection，语音活动检测。先判断哪段真有人说话，再只转写那部分，能大幅提速并避开纯音乐。"],
+  ["CPU / GPU", "CPU 通用处理器，慢但哪都有；GPU 显卡，快但要硬件支持。Whisper 在 CPU 上也能跑，只是慢。"],
+  ["模型镜像", "下载模型的中转地址。国内直连 Hugging Face 通常超时，程序默认用国内镜像 hf-mirror.com。"],
+  ["Markdown", "一种用 #、-、** 标记结构的纯文本格式。导出的 .md 文件用就是这个，各笔记软件都认。"]
+];
+
+function openTerms() {
+  var h = "<h3>术语表</h3><div class='hint'>界面上所有英文词的中文含义，看完这页就不用了再问。</div><div class='term'>";
+  for (var i = 0; i < GLOSS.length; i++) {
+    h += "<div><b>" + esc(GLOSS[i][0]) + "</b><span>" + GLOSS[i][1] + "</span></div>";
+  }
+  h += "</div>";
+
+  h += "<h3>下拉选项速查</h3>";
+  var keys = ["engine", "style", "asr_model_size", "preset"];
+  for (var k = 0; k < keys.length; k++) {
+    var t = TERMS[keys[k]];
+    if (!t || !t.items) continue;
+    h += "<div style='margin:10px 0 4px'><b style='color:#57606a'>" + esc(t.label) + "</b></div><div class='term'>";
+    for (var v in t.items) {
+      if (!t.items.hasOwnProperty(v)) continue;
+      h += "<div><b>" + esc(v) + "</b><span><i>" + esc(t.items[v][0]) + "</i> — "
+         + t.items[v][1] + "</span></div>";
+    }
+    h += "</div>";
+  }
+  show(h);
+}
+
+/* ---------------- 导出 / 复制 ---------------- */
+function doExport() {
+  if (!TASK) return;
+  xhr("POST", "/api/export", { task_id: TASK }, function (d) {
+    if (d && d.files) { setStatus("已导出 " + d.files.length + " 个文件", "ok"); }
+    else setStatus((d && d.error) || "导出失败", "err");
+  });
+}
+
+function doCopy() {
+  xhr("GET", "/api/status?task_id=" + TASK, null, function (d) {
+    var txt = (d && d.plain) || "";
+    var ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); setStatus("已复制 " + txt.length + " 字", "ok"); }
+    catch (e) { setStatus("复制失败，请手动选择文本", "err"); }
+    document.body.removeChild(ta);
+  });
+}
+
+/* ---------------- 绑定 ---------------- */
+$("btnRun").onclick = start;
+$("btnCancel").onclick = function () {
+  if (TASK) xhr("POST", "/api/cancel", { task_id: TASK }, function () { setStatus("已请求取消…", ""); });
+};
+// 清空：输入框 + 结果 + 元信息 + 进度条 + 状态，全部复位。
+// 绑 Esc 快捷键 —— 粘了一大段又后悔时，手不用离开键盘。
+function clearAll() {
+  $("input").value = "";
+  clearAttach();
+  $("result").innerHTML = "";
+  $("meta").innerHTML = "";
+  $("hint").className = "hint";
+  $("hint").innerHTML = "";
+  $("bar").style.width = "0";
+  setStatus("就绪", "");
+  $("btnRun").disabled = false;
+  $("btnCancel").disabled = true;
+  $("input").focus();
+}
+$("btnClear").onclick = clearAll;
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") {
+    // 任务进行中不抢「取消」的风头，交由 btnCancel 处理
+    if (!$("btnRun").disabled) return;
+    clearAll();
+  }
+});
+$("btnDemo").onclick = function () {
+  clearAttach();
+  $("input").value = "https://www.bilibili.com/video/BV1GJ411x7h7";
+};
+/* 选择文件：拖拽在个别环境（老版 WebView2 运行时）可能被系统拦掉，
+   这个按钮是**保底入口**，两者走同一条上传+总结链路。 */
+$("btnFile").onclick = function () { $("filePick").click(); };
+$("filePick").onchange = function () {
+  if (this.files && this.files.length) acceptFiles(this.files);
+  this.value = "";   /* 清空才能连续选同一个文件（否则不再触发 change） */
+};
+$("attachRm").onclick = function () {
+  clearAttach();
+  setStatus("已移除附加文件，可重新粘贴链接或拖入文件", "");
+};
+/* 用户开始在输入框里打字 → 认为他改主意了，撤掉附件，避免"两个都提交"的错觉 */
+$("input").oninput = function () { if (this.value) clearAttach(); };
+$("input").onkeyup = function () { if (this.value) clearAttach(); };
+
+$("btnSettings").onclick = openSettings;
+$("btnPlatforms").onclick = openPlatforms;
+$("btnTerms").onclick = openTerms;
+$("btnClose").onclick = hide;
+$("mask").onclick = function (e) { if (e.target === $("mask")) hide(); };
+$("btnCopy").onclick = doCopy;
+$("btnExport").onclick = doExport;
+$("btnVault").onclick = function () { doVault(false); };
+$("btnVaultForce").onclick = function () { doVault(true); };
+$("style").onchange = function () {
+  xhr("POST", "/api/config", { config: { summary: { style: $("style").value } } }, function () {});
+  rowExpl();
+};
+$("engine").onchange = function () {
+  xhr("POST", "/api/config", { config: { asr: { engine: $("engine").value } } }, function () {});
+  rowExpl();
+};
+
+/* 主界面两个下拉共用一行说明：显示「文本来源」的释义（信息量最大的那个） */
+function rowExpl() {
+  var e = $("engine"), s = $("style");
+  var it = termOf("engine", e.value);
+  var st = termOf("style", s.value);
+  var h = "";
+  if (it) h += "<b>文本来源：" + esc(it[0]) + "</b> — " + it[1];
+  if (st) h += (h ? "<br>" : "") + "<b>风格：" + esc(st[0]) + "</b> — " + esc(st[1]);
+  $("rowExpl").innerHTML = h;
+}
+/* 主界面的 select 不走 bindSelect（它会写 expl-xxx 行，这里用共用行），
+   只借它的悬浮行为 */
+function hoverOnly(sel, key) {
+  sel.onmouseover = function (ev) {
+    var t = TERMS[key], it = termOf(key, sel.value);
+    if (t) tipShow("<b>" + esc(t.label) + "</b><br><b>" + esc(it[0]) + "</b>：" + it[1], ev);
+  };
+  sel.onmousemove = function (ev) { if (TIP && TIP.style.display === "block") sel.onmouseover(ev); };
+  sel.onmouseout = tipHide;
+}
+hoverOnly($("engine"), "engine");
+hoverOnly($("style"), "style");
+
+loadConfig(function (d) {
+  if (d && d.config) {
+    var s = (d.config.summary || {}).style; if (s) $("style").value = s;
+    var e = (d.config.asr || {}).engine; if (e) $("engine").value = e;
+    var msg = (d.llm_ready && d.llm_ready[0]) ? "大模型已配置" : "大模型未配置：" + ((d.llm_ready && d.llm_ready[1]) || "");
+    setStatus(msg + (d.asr_installed ? " · 本地识别组件已就绪" : " · 本地识别组件未安装"), "");
+  }
+  rowExpl();
+});
+</script>
+</body>
+</html>
