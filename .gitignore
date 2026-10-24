@@ -16,6 +16,7 @@ _diag*.py
 config.json
 out/
 *.log
+rag_store/
 
 # 内置浏览器内核副本（219 MB，由 tools/prepare_browser_vendor.py 生成本地生成，不入库）
 vendor/
